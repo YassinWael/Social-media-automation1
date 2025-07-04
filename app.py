@@ -2,7 +2,7 @@ from flask import Flask, redirect, request, session, url_for, render_template
 import os, requests
 from dotenv import load_dotenv
 from icecream import ic
-from utils import get_page_token
+from utils import *
 # --- 0. Bootstrapping ---
 load_dotenv()                 # pull in .env vars
 app = Flask(__name__)
@@ -102,6 +102,7 @@ def post_to_page():
     page_token = get_page_token(pages_id,session) if pages_id else None
 
     if not user_token or not pages_id:
+        ic("User not logged in or no page selected", user_token, pages_id)
         return redirect("/login")
     
 
@@ -110,7 +111,7 @@ def post_to_page():
         f"https://graph.facebook.com/v23.0/{pages_id}/feed",
         params={
             "access_token": page_token,
-            "message": "Test From Python."
+            "message": "Ferrari"
         }
     )
     ic(response.status_code, response.json())
@@ -123,6 +124,7 @@ def post_to_page():
 def posts():
     user_token = session.get("user_token")
     pages_id = session.get("pages_id")
+    posts_niche = session.get("posts_niche")
     if not user_token or not pages_id:
         return redirect("/login")
     page_token = get_page_token(pages_id,session)
@@ -134,9 +136,18 @@ def posts():
             "fields": "id,message,created_time"
         }
     )
-    ic(response.status_code, response.json())
+    ic(response.status_code)
     posts = response.json().get("data", [])
-    return render_template("posts.html", posts=posts)
+    if not posts_niche:
+        posts_niche = query_gemini(
+            prompt="Extract the niche of the facebook page that's posting these posts",
+            text=posts,
+            scheme={'niche': None}
+        ).get('niche', None)
+        session['posts_niche'] = posts_niche
+    else:
+        print(f"Using cached niche: {posts_niche}")
+    return render_template("posts.html", posts=posts,niche=posts_niche)
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)  # debug=True for dev convenience

@@ -2,24 +2,28 @@ from icecream import ic
 import requests
 import google.generativeai as genai
 from dotenv import load_dotenv
+from json import loads
 from os import environ
 load_dotenv()
 
 
 genai_api_key = environ.get("genai_api_key")
+ic(genai_api_key)
 
 def query_gemini(prompt,text="",scheme=""):
+    genai.configure(api_key=genai_api_key)
     model = genai.GenerativeModel("gemini-2.0-flash")
-    JSON_ONLY = f"ONLY RETURN THE RESULT AS JSON, Make sure the json will NOT raise a JSONDecodeError when loaded with json.loads() in Python. You should make sure your json doesn't violate the scheme: {scheme}"
+    JSON_ONLY = f"ONLY RETURN THE RESULT AS JSON, Make sure the json will NOT raise a JSONDecodeError when loaded with json.loads() in Python. You should make sure your json doesn't violate the scheme: {str(scheme)}, if unable to fill a value in the scheme simply leave it as None"
     try:
-        response = """"""
+        response = model.generate_content(f"{prompt}, {JSON_ONLY}:  {text}")
+        json_content = response.text.lstrip("```json\n").rstrip("```")
+        print(json_content)
+        ic(loads(json_content))
+        return loads(json_content)
     except Exception as e:
         ic(f"Error in query_gemini: {e}")
-        return None
+        return scheme if isinstance(scheme, dict) else {}
         
-
-
-
 
 
 
