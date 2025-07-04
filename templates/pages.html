@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head><title>Your Pages</title></head>
+<body>
+  <h1>Your Managed Pages</h1>
+  <ul>
+    {% for page in pages %}
+      <li>{{ page.name }} (ID: {{ page.id }})</li>
+    {% endfor %}
+  </ul>
+  <a href="/">Back to Home</a>
+</body>
+</html>

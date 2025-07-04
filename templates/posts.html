@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head><title>Your posts</title></head>
+<body>
+  <h1>Your Managed posts</h1>
+  <ul>
+    {% for post in posts %}
+      <li>{{ post.name }} (ID: {{ post.id }})</li>
+    {% endfor %}
+  </ul>
+  <a href="/">Back to Home</a>
+</body>
+</html>
