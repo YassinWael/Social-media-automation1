@@ -2,6 +2,7 @@ from flask import Flask, redirect, request, session, url_for, render_template
 import os, requests
 from dotenv import load_dotenv
 from icecream import ic
+from utils import get_page_token
 # --- 0. Bootstrapping ---
 load_dotenv()                 # pull in .env vars
 app = Flask(__name__)
@@ -10,28 +11,6 @@ app.secret_key = os.urandom(24)  # session encryption (dev-only)
 FB_APP_ID     = os.getenv("FB_APP_ID")
 FB_APP_SECRET = os.getenv("FB_APP_SECRET")
 REDIRECT_URI  = "http://localhost:5000/callback"
-
-
-def get_page_token(page_id):
-    """
-    Get the page access token for a given page ID.
-    This is used to post to the page.
-    """
-    user_token = session.get("user_token")
-    if not user_token:
-        return None
-    response = requests.get(
-        f"https://graph.facebook.com/v23.0/{page_id}",
-        params={
-            "fields": "access_token",
-            "access_token": user_token
-        }
-    )
-    if response.status_code == 200:
-        ic(response.json())
-        return response.json().get("access_token")
-    return None
-
 
 
 
@@ -120,7 +99,7 @@ def pages():
 def post_to_page():
     user_token = session.get("user_token")
     pages_id = session.get("pages_id")
-    page_token = get_page_token(pages_id) if pages_id else None
+    page_token = get_page_token(pages_id,session) if pages_id else None
 
     if not user_token or not pages_id:
         return redirect("/login")
@@ -131,7 +110,7 @@ def post_to_page():
         f"https://graph.facebook.com/v23.0/{pages_id}/feed",
         params={
             "access_token": page_token,
-            "message": "Test"
+            "message": "Test From Python."
         }
     )
     ic(response.status_code, response.json())
@@ -146,10 +125,10 @@ def posts():
     pages_id = session.get("pages_id")
     if not user_token or not pages_id:
         return redirect("/login")
-    page_token = get_page_token(pages_id)
+    page_token = get_page_token(pages_id,session)
     ic(user_token, pages_id, page_token)
     response = requests.get(
-        f"https://graph.facebook.com/v23.0/{pages_id}/feed",
+        f"https://graph.facebook.com/v23.0/{pages_id}/published_posts",
         params={
             "access_token": page_token,
             "fields": "id,message,created_time"
