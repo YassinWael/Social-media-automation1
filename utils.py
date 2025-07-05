@@ -5,6 +5,8 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 from json import loads
 from os import environ
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
+import textwrap
 load_dotenv()
 
 
@@ -33,7 +35,7 @@ def get_image_from_unsplash(query="fancy black"):
     Get a random image from Unsplash based on the query.
     """
   
-    logging.info("Unsplash API called.")
+    logging.info(f"Unsplash API called, with query {query}")
     response = requests.get(
     f"https://api.unsplash.com/search/photos",
     params={
@@ -86,3 +88,79 @@ def get_page_token(page_id,session):
         ic(response.json())
         return response.json().get("access_token")
     return None
+
+
+
+def add_text_to_image(image_path, text="Money is life.", output_path="output.png"):
+    img = Image.open(image_path).convert("RGBA")
+    width, height = img.size
+
+    # Background blur area
+    fade_height = int(height * 0.25)
+    blur_y_start = height - fade_height
+    blur_box = (0, blur_y_start, width, height)
+    blurred_region = img.crop(blur_box).filter(ImageFilter.GaussianBlur(radius=10))
+    img.paste(blurred_region, blur_box)
+
+    # Overlay with glass effect
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    margin_x = int(width * 0.05)
+    margin_y = int(fade_height * 0.15)
+    rect_shape = [margin_x, blur_y_start + margin_y, width - margin_x, height - margin_y]
+    draw.rounded_rectangle(rect_shape, radius=30, fill=(0, 0, 0, 120))
+    img = Image.alpha_composite(img, overlay)
+
+    # Draw wrapped text
+    draw = ImageDraw.Draw(img)
+    max_width = rect_shape[2] - rect_shape[0] - 20  # padding inside the box
+
+    font_size = int(fade_height * 0.3)
+    try:
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except:
+        font = ImageFont.load_default()
+
+    # Wrap and shrink if needed
+    wrapper = textwrap.TextWrapper(width=40)
+    while True:
+        lines = wrapper.wrap(text)
+        try:
+            line_widths = [draw.textlength(line, font=font) for line in lines]
+        except:
+            line_widths = [draw.textsize(line, font=font)[0] for line in lines]
+        if max(line_widths) <= max_width or font_size <= 10:
+            break
+        font_size -= 2
+        font = ImageFont.truetype("arial.ttf", font_size)
+
+    # Calculate total text height
+    total_text_height = 0
+    line_heights = []
+    for line in lines:
+        try:
+            bbox = draw.textbbox((0, 0), line, font=font)
+            line_height = bbox[3] - bbox[1]
+        except:
+            line_height = draw.textsize(line, font=font)[1]
+        line_heights.append(line_height)
+        total_text_height += line_height + 10  # 10 px spacing
+
+    start_y = blur_y_start + (fade_height - total_text_height) // 2
+
+    for i, line in enumerate(lines):
+        try:
+            line_width = draw.textlength(line, font=font)
+        except:
+            line_width = draw.textsize(line, font=font)[0]
+        x = (width - line_width) // 2
+        draw.text((x, start_y), line, font=font, fill=(255, 255, 255, 255))
+        start_y += line_heights[i] + 10
+
+    img.convert("RGB").save(output_path)
+    return output_path
+
+
+def generate_post(niche):
+    post_content = query_gemini(prompt="Please generate a facebook post text content for the current niche")

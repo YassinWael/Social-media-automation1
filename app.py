@@ -178,29 +178,30 @@ def posts(page_id):
             "fields": "id,message,created_time,permalink_url",
         }
     )
-
+    posts_niche,image=None,None # placeholders
     ic(response.status_code)
     posts_data = response.json().get("data", [])
     list_of_post_ids = [post['id'] for post in posts_data]
     ic(posts_data,list_of_post_ids)
     print("----------------------------------")
-
-    image = session.get(f"image_{page_id}")
-    posts_niche = session.get(f"posts_niche_{page_id}")
-    if not posts_niche or session.get('post_ids',[]) != list_of_post_ids: # new post or something similar
-        posts_niche = query_gemini(
-            prompt="Extract the niche of the facebook page that's posting these posts, ONLY THREE WORDS MAX AS THE NICHE",
-            text=str(posts_data),
-            scheme={'niche': None}
-        ).get('niche', 'General')
-        image = get_image_from_unsplash(posts_niche)
-        session[f"posts_niche_{page_id}"] = posts_niche
-        session[f'image_{page_id}']= image
-    else:
-        ic(f"Using cached niche for {page_id}: {posts_niche}")
-    if not image:
-        image = get_image_from_unsplash(posts_niche)
-        session[f'image_{page_id}']= image
+    if list_of_post_ids: # make sure at least one post exists
+        image = session.get(f"image_{page_id}")
+        posts_niche = session.get(f"posts_niche_{page_id}")
+        if not posts_niche or session.get('post_ids',[]) != list_of_post_ids: # new post or something similar
+            niche_info = query_gemini(
+                prompt="Identify the primary niche of the Facebook page in two words. Then, provide a detailed breakdown of its extended niche, including tone, audience, content themes, and post types. This analysis will be used by another LLM to generate Facebook posts, so ensure it's clear, specific, and highly descriptive.",
+                text=str(posts_data),
+                scheme={'niche': None,'extended_niche':None}
+            )
+            posts_niche = niche_info.get('niche', 'General')
+            image = get_image_from_unsplash(posts_niche)
+            session[f"posts_niche_{page_id}"] = posts_niche
+            session[f'image_{page_id}']= image
+        else:
+            ic(f"Using cached niche for {page_id}: {posts_niche}")
+        if not image:
+            image = get_image_from_unsplash(posts_niche)
+            session[f'image_{page_id}']= image
 
 
     session['post_ids'] = list_of_post_ids
