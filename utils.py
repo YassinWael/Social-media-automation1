@@ -1,3 +1,4 @@
+import logging
 from icecream import ic
 import requests
 import google.generativeai as genai
@@ -8,7 +9,47 @@ load_dotenv()
 
 
 genai_api_key = environ.get("genai_api_key")
-ic(genai_api_key)
+unsplash_key = environ.get("unsplash_access_key")
+
+def upload_image_to_facebook(page_id, page_token,image_url):
+    upload = requests.post(
+        f"https://graph.facebook.com/v23.0/{page_id}/photos",
+        params= {
+            "access_token":page_token,
+            "url":image_url,
+            "published":"false"
+        }
+    ).json()
+    ic(f"Uploaded image to facebook: {upload}")
+    if "id" in upload:
+        return upload["id"]
+    else:
+        ic(f"Error uploading image: {upload}")
+        return None
+    
+
+def get_image_from_unsplash(query="fancy black"):
+    """
+    Get a random image from Unsplash based on the query.
+    """
+  
+    logging.info("Unsplash API called.")
+    response = requests.get(
+    f"https://api.unsplash.com/search/photos",
+    params={
+        "query":query,
+        "per_page":1,
+        "client_id":unsplash_key
+        }
+)
+    if response.status_code == 200:
+        print(response.json()['results'][0]['urls']['regular'])
+        image_url = response.json()['results'][0]['urls']['regular']
+        ic(f"Image URL from Unsplash: {image_url}")
+        return image_url
+    else:
+        ic(f"Error fetching image from Unsplash: {response.status_code} - {response.text}")
+        return None
 
 def query_gemini(prompt,text="",scheme=""):
     genai.configure(api_key=genai_api_key)
@@ -24,7 +65,6 @@ def query_gemini(prompt,text="",scheme=""):
         ic(f"Error in query_gemini: {e}")
         return scheme if isinstance(scheme, dict) else {}
         
-
 
 
 def get_page_token(page_id,session):

@@ -1,13 +1,17 @@
-<!DOCTYPE html>
-<html>
-<head><title>Your Pages</title></head>
-<body>
-  <h1>Your Managed Pages</h1>
-  <ul>
+{% extends "base.html" %}
+
+{% block title %}Your Pages{% endblock %}
+
+{% block content %}
+<h1>Your Managed Pages</h1>
+<div class="list-group">
     {% for page in pages %}
-      <li>{{ page.name }} (ID: {{ page.id }})</li>
+    <a href="{{ url_for('posts', page_id=page.id) }}" class="list-group-item list-group-item-action">
+        <div class="d-flex w-100 justify-content-between">
+            <h5 class="mb-1">{{ page.name }}</h5>
+            <small>ID: {{ page.id }}</small>
+        </div>
+    </a>
     {% endfor %}
-  </ul>
-  <a href="/">Back to Home</a>
-</body>
-</html>
+</div>
+{% endblock %}
