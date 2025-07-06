@@ -11,7 +11,7 @@
 <div class="card mb-4">
     <div class="card-body">
         <h5 class="card-title">Create a new post</h5>
-        <form action="{{ url_for('post_to_page',page_id=page_id) }}" method="post">
+        <form action="{{ url_for('post_to_page_via_form',page_id=page_id) }}" method="post">
             <div class="mb-3">
                 <textarea class="form-control" name="message" rows="3" placeholder="What's on your mind?"></textarea>
             </div>
@@ -21,7 +21,9 @@
 </div>
 
 <h3>Auto Generated Posts</h3>
-<a href="{{ url_for('generate_posts', page_id=page_id) }}" class="btn btn-primary">Generate Post</a>
+<form action="{{ url_for('generate_posts',page_id=page_id) }}" method="post">
+    <button type="submit" class="btn btn-primary">Generate post</button>
+</form>
 <img src="{{ image }}" alt="">
 
 
