@@ -3,9 +3,15 @@
 {% block title %}Welcome to TrendPoster{% endblock %}
 
 {% block content %}
-<div class="text-center">
-    <h1>Welcome to TrendPoster</h1>
-    <p class="lead">The easiest way to manage your Facebook Pages.</p>
-    <a href="/login" class="btn btn-primary btn-lg">🔑 Login with Facebook</a>
+<div class="fade-in text-center py-16">
+    <h1 class="text-5xl md:text-7xl font-extrabold mb-4">
+        Automate Your <span class="gradient-text">Social Media</span>
+    </h1>
+    <p class="text-lg md:text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto mb-8">
+        TrendPoster uses AI to analyze your page's niche, generate stunning posts, and keep your audience engaged.
+    </p>
+    <a href="/login" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-full transition-transform transform hover:scale-105 shadow-lg text-lg">
+        <i class="fab fa-facebook mr-2"></i> Login with Facebook
+    </a>
 </div>
 {% endblock %}

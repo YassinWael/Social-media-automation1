@@ -25,7 +25,7 @@ flask_logger.setLevel(logging.ERROR)
 
 
 POST_GENERATION_PROMPT = """Generate the text (caption) for a facebook page post. The page's niche, and extra information will be given to you.
-                            you also will be given an Image of which your text will be overlayed on in the post, so aim for 2-3 sentences max. Follow the extended niche
+                            you also will be given an Image of which your text will be overlayed on in the post, so aim for 2-3 sentences MAX. Follow the extended niche
 """
 
 
@@ -234,6 +234,7 @@ def posts(page_id):
 
 @app.route('/generate_posts/<page_id>', methods=["POST"])
 def generate_posts(page_id):
+    
     niche = session[f'posts_niche_{page_id}']
     extended_niche = session[f'extended_niche_{page_id}']
     image_niche = session[f'image_niche_{page_id}']
