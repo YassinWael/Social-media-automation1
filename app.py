@@ -1,4 +1,5 @@
 from pprint import pprint
+import time
 from flask import Flask, redirect, request, session, url_for, render_template
 import os
 import requests
@@ -7,25 +8,26 @@ from icecream import ic
 from utils import *
 from json import loads,dumps
 import logging
-from os import startfile
 
-# Set up logging to both console and file
-log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+# Set up logging to both console and file with 12-hour time format
+log_formatter = logging.Formatter(
+    fmt='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %I:%M:%S %p'  # 12-hour format with AM/PM
+)
+
 log_file = 'app.log'
-
 file_handler = logging.FileHandler(log_file)
 file_handler.setFormatter(log_formatter)
 file_handler.setLevel(logging.INFO)
 
-
 logging.basicConfig(level=logging.INFO, handlers=[file_handler])
-
 flask_logger = logging.getLogger('werkzeug')
 flask_logger.setLevel(logging.ERROR)
 
 
 POST_GENERATION_PROMPT = """Generate the text (caption) for a facebook page post. The page's niche, and extra information will be given to you.
-                            you also will be given an Image of which your text will be overlayed on in the post, so aim for 2-3 sentences MAX. Follow the extended niche
+                            you also will be given an Image of which your text will be overlayed on in the post, so aim for 2-3 sentences MAX. Follow the extended niche, you might also be given a cta for the post (what the user wants the post to accomplish) please follow it.
 """
 
 
@@ -145,7 +147,7 @@ def post_to_page_via_form(page_id):
 
 def post_to_page(page_id,message,image_id):
     logging.info(f"Posting to {page_id}")
-
+    start_time = time.time()
     user_token = session.get("user_token")
     page_token = get_page_token(page_id, session)
     if not user_token or not page_token or not message:
@@ -164,6 +166,7 @@ def post_to_page(page_id,message,image_id):
     )
     logging.info(f"response: {response.json()}")
     ic("Posting",response.status_code)
+    logging.info(f"Posting: {response.status_code}, done in: {time.time() - start_time:.2f} seconds")
     return response.json()
 
 
@@ -177,12 +180,7 @@ def posts(page_id):
     if not page_token:
         return "Could not retrieve page token", 400
         
-    page_details_resp = requests.get(
-        f"https://graph.facebook.com/v23.0/{page_id}",
-        params={"access_token": page_token, "fields": "name"}
-    )
-    page_name = page_details_resp.json().get("name", "")
-
+    
 
     response = requests.get(
         f"https://graph.facebook.com/v23.0/{page_id}/published_posts",
@@ -207,7 +205,6 @@ def posts(page_id):
                 text=str(posts_data),
                 scheme={"niche": None,"extended_niche":"more information, string only nothing extra.","image_niche":"2 words to search for the image, general"}
             )
-            ic(niche_info)
             posts_niche = niche_info.get('niche', 'General')
             extended_niche = niche_info.get('extended_niche','General')
             image_niche = niche_info.get('image_niche')
@@ -230,15 +227,15 @@ def posts(page_id):
 
     session['post_ids'] = list_of_post_ids
 
-    return render_template("posts.html", posts=posts_data, niche=posts_niche, image=image, page_id=page_id, page_name=page_name)
+    return render_template("posts.html", posts=posts_data, niche=posts_niche, image=image, page_id=page_id)
 
 @app.route('/generate_posts/<page_id>', methods=["POST"])
 def generate_posts(page_id):
-    
+    start_time = time.time()
     niche = session[f'posts_niche_{page_id}']
     extended_niche = session[f'extended_niche_{page_id}']
     image_niche = session[f'image_niche_{page_id}']
-
+    cta = f'the desired outcome of this post is to: {request.form.get("cta","general")}'
 
     image_link = session.get(f'image_{page_id}',get_image_from_unsplash(image_niche))
     img_data = requests.get(image_link) 
@@ -247,7 +244,7 @@ def generate_posts(page_id):
     with open(img_path,"wb") as f: # downloading the unsplash image to local
         f.write(img_data.content)
 
-    image_caption = query_gemini(prompt=POST_GENERATION_PROMPT,text=f"{niche,extended_niche}", image_path=img_path,scheme={"caption":None}).get("caption")
+    image_caption = query_gemini(prompt=POST_GENERATION_PROMPT,text=f"{niche,extended_niche,cta}", image_path=img_path,scheme={"caption":None}).get("caption")
     output_path = add_text_to_image(img_path,image_caption)
 
     logging.info(f"image_caption: {image_caption}")
@@ -258,7 +255,21 @@ def generate_posts(page_id):
     
     image_id = upload_image_to_facebook(page_id, get_page_token(page_id, session),image_to_post_link)
     post_to_page(page_id,image_caption,image_id)
+    end_time = time.time()
+    logging.info(f"Time taken to generate post: {end_time - start_time}")
+    return redirect(request.referrer)
 
+
+
+@app.route("/edit_niche/<page_id>",methods=['POST'])
+def edit_niche(page_id):
+    new_niche = request.form.get('niche')
+    logging.info(f"Changing the current niche to: {new_niche}...")
+
+    session[f'posts_niche_{page_id}'] = new_niche
     return redirect(request.referrer)
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
+
+
+# allow the user to choose a cta

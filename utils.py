@@ -8,6 +8,7 @@ from json import loads
 from os import environ
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import textwrap
+import time
 load_dotenv()
 
 
@@ -18,6 +19,7 @@ if not all([genai_api_key,unsplash_key,image_upload_key]):
     logging.warning(f"One of the api keys is empty: {genai_api_key,unsplash_key,image_upload_key}")
 def upload_image_to_facebook(page_id, page_token,image_url):
     logging.info(f"Uploading: {image_url}...")
+    start_time = time.time()
     upload = requests.post(
         f"https://graph.facebook.com/v23.0/{page_id}/photos",
         params= {
@@ -28,6 +30,7 @@ def upload_image_to_facebook(page_id, page_token,image_url):
     ).json()
     ic(f"Uploaded image to facebook: {upload}")
     if "id" in upload:
+        logging.info(f"Uploaded image to facebook in {time.time() - start_time:.2f}")
         return upload["id"]
     else:
         ic(f"Error uploading image: {upload}")
@@ -58,6 +61,7 @@ def get_image_from_unsplash(query="fancy black"):
         return None
 
 def query_gemini(prompt,text="",image_path="",scheme=""):
+    start_time = time.time()
     genai.configure(api_key=genai_api_key)
     model = genai.GenerativeModel("gemini-2.0-flash")
     JSON_ONLY = f"ONLY RETURN THE RESULT AS JSON, Make sure the json will NOT raise a JSONDecodeError when loaded with json.loads() in Python. DOUBLE QUOTES You should make sure your json doesn't violate the scheme: {str(scheme)}, if unable to fill a value in the scheme simply leave it as None"
@@ -74,6 +78,7 @@ def query_gemini(prompt,text="",image_path="",scheme=""):
         ic(loads(json_content))
         if isinstance(json_content,list):
             json_content = json_content[0]
+        logging.info(f"Time taken to query gemini: {time.time() - start_time:.2f} seconds")
         return loads(json_content)
     except Exception as e:
         logging.error(f"Error with gemini api: {e}")
@@ -120,6 +125,7 @@ def add_text_to_image(image_path, text="Money is life.", output_path="output.png
     Returns:
         str: path to the output image
     """
+    start_time = time.time()
     img = Image.open(image_path).convert("RGBA")
     width, height = img.size
 
@@ -187,11 +193,12 @@ def add_text_to_image(image_path, text="Money is life.", output_path="output.png
         start_y += line_heights[i] + 10
 
     img.convert("RGB").save(output_path)
+    logging.info(f"Image saved to {output_path} in {time.time() - start_time:.2f} seconds")
     return output_path
 
 
 def upload_image(image_path):
-    """Uploads an image to imgbb.com and returns the image's display URL
+    """Uploads an image to catbox.me and returns the image's display URL
     
     Args:
         image_path (str): Path to the image file to upload.
@@ -199,15 +206,17 @@ def upload_image(image_path):
     Returns:
         str: The URL of the uploaded image.
     """
+    start_time = time.time()
     logging.info(f"Uploading {image_path}...")
     with open(image_path,"rb") as f:
         response = requests.post(
-            url = "https://api.imgbb.com/1/upload",
-            params= {
-                "key":image_upload_key
+            url = "https://catbox.moe/user/api.php",
+            data= {
+                "reqtype":'fileupload'
             },
             files={
-                "image":f
+                "fileToUpload":f
             }
         )
-    return response.json()['data']['display_url']
+    logging.info(f"Uploaded to: {response.text} in {time.time() - start_time:.2f} seconds. ")
+    return response.text
