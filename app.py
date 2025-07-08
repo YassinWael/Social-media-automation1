@@ -18,8 +18,7 @@ log_formatter = logging.Formatter(
 )
 
 log_file = 'app.log'
-logging.info(environ.get("RAILWAY_PUBLIC_DOMAIN"))
-print(environ.get("RAILWAY_PUBLIC_DOMAIN"))
+
 file_handler = logging.FileHandler(log_file)
 file_handler.setFormatter(log_formatter)
 file_handler.setLevel(logging.INFO)
@@ -43,7 +42,9 @@ FB_APP_ID = os.getenv("FB_APP_ID")
 FB_APP_SECRET = os.getenv("FB_APP_SECRET")
 REDIRECT_URI = "https://f762-213-137-138-220.ngrok-free.app/callback"
 
-
+if environ.get("RAILWAY_PUBLIC_DOMAIN"):
+    REDIRECT_URI = "https://social-media-automation1-production.up.railway.app/callback"
+ 
 # --- 1. Home page ---
 @app.route("/")
 def index():
