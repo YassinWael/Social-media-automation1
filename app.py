@@ -269,7 +269,7 @@ def edit_niche(page_id):
     session[f'posts_niche_{page_id}'] = new_niche
     return redirect(request.referrer)
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0',debug=True, port=5000)
 
 
 # allow the user to choose a cta
