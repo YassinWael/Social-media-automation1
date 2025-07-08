@@ -110,9 +110,7 @@ def get_page_token(page_id,session):
     return None
 
 
-import time
-import logging
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+
 
 def add_text_to_image(
     image_path,
@@ -228,7 +226,6 @@ def add_text_to_image(
     return output_path
 
 
-add_text_to_image("image.png","Buy this buy this car watch those whddgeels buy thi..s")
 
 def upload_image(image_path):
     """Uploads an image to catbox.me and returns the image's display URL
