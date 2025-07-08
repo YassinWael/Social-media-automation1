@@ -110,92 +110,137 @@ def get_page_token(page_id,session):
     return None
 
 
-
-def add_text_to_image(image_path, text="Money is life.", output_path="output.png"):
-    """
-    Add a glass-like effect and a blurred background to a given image, with
-    a message on top of it. The text is wrapped and its size is adjusted to fit
-    within the glass area. The output image is saved to a file.
-
-    Args:
-        image_path (str): path to the input image
-        text (str, optional): text to display on top of the image. Defaults to "Money is life."
-        output_path (str, optional): path to the output image. Defaults to "output.png"
-
-    Returns:
-        str: path to the output image
-    """
+def add_text_to_image(
+    image_path,
+    text="Money is life.",
+    output_path="output.png",
+    blur_radius=15,
+    glass_color=(255, 255, 255, 70),
+    border_color=(255, 255, 255, 100),
+    border_width=2,
+    text_color=(255, 255, 255, 245),
+    shadow_color=(0, 0, 0, 110)
+):
     start_time = time.time()
-    img = Image.open(image_path).convert("RGBA")
+    try:
+        img = Image.open(image_path).convert("RGBA")
+    except FileNotFoundError:
+        logging.error(f"Error: Input image not found at {image_path}")
+        return None
+
     width, height = img.size
 
-    # Background blur area
-    fade_height = int(height * 0.25)
-    blur_y_start = height - fade_height
+    # 1. Background Blur
+    blur_area_height = int(height * 0.25)
+    blur_y_start = height - blur_area_height
     blur_box = (0, blur_y_start, width, height)
-    blurred_region = img.crop(blur_box).filter(ImageFilter.GaussianBlur(radius=10))
+    blurred_region = img.crop(blur_box).filter(ImageFilter.GaussianBlur(radius=blur_radius))
     img.paste(blurred_region, blur_box)
 
-    # Overlay with glass effect
-    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-
+    # 2. Frosted glass panel coords
     margin_x = int(width * 0.05)
-    margin_y = int(fade_height * 0.15)
-    rect_shape = [margin_x, blur_y_start + margin_y, width - margin_x, height - margin_y]
-    draw.rounded_rectangle(rect_shape, radius=30, fill=(0, 0, 0, 120))
-    img = Image.alpha_composite(img, overlay)
+    margin_y = int(blur_area_height * 0.15)
+    rect_x1 = margin_x
+    rect_y1 = blur_y_start + margin_y
+    rect_x2 = width - margin_x
+    rect_y2 = height - margin_y
 
-    # Draw wrapped text
+    # Frosted Glass Overlay
+    glass_overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(glass_overlay)
+    draw.rounded_rectangle(
+        [rect_x1 - border_width, rect_y1 - border_width, rect_x2 + border_width, rect_y2 + border_width],
+        radius=30 + border_width,
+        fill=border_color
+    )
+    draw.rounded_rectangle([rect_x1, rect_y1, rect_x2, rect_y2], radius=30, fill=glass_color)
+    img = Image.alpha_composite(img, glass_overlay)
+
+    # 3. TrueType font loader
+    def get_truetype_font(size):
+        candidates = [
+            "arial.ttf",                                    # Windows
+            "/Library/Fonts/Arial.ttf",                     # macOS
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"  # Linux
+        ]
+        for fp in candidates:
+            try:
+                return ImageFont.truetype(fp, size)
+            except Exception:
+                continue
+        raise RuntimeError("No TrueType font found. Install one or update the path.")
+
     draw = ImageDraw.Draw(img)
-    max_width = rect_shape[2] - rect_shape[0] - 20  # padding inside the box
+    padding = int(margin_x * 0.5)
+    max_w = rect_x2 - rect_x1 - padding * 2
+    max_h = rect_y2 - rect_y1 - padding * 2
 
-    font_size = int(fade_height * 0.3)
-    try:
-        font = ImageFont.truetype("arial.ttf", font_size)
-    except:
-        font = ImageFont.load_default()
+    # 4. Binary search for largest fitting font size
+    lo, hi = 10, max(max_w, max_h)
+    best_size = lo
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        font = get_truetype_font(mid)
 
-    # Wrap and shrink if needed
-    wrapper = textwrap.TextWrapper(width=40)
-    while True:
-        lines = wrapper.wrap(text)
-        try:
-            line_widths = [draw.textlength(line, font=font) for line in lines]
-        except:
-            line_widths = [draw.textsize(line, font=font)[0] for line in lines]
-        if max(line_widths) <= max_width or font_size <= 10:
-            break
-        font_size -= 2
-        font = ImageFont.truetype("arial.ttf", font_size)
+        # wrap text
+        words = text.split()
+        lines, line = [], ""
+        for w in words:
+            test = (line + " " + w).strip()
+            if draw.textlength(test, font=font) <= max_w:
+                line = test
+            else:
+                lines.append(line)
+                line = w
+        lines.append(line)
 
-    # Calculate total text height
-    total_text_height = 0
-    line_heights = []
-    for line in lines:
-        try:
-            bbox = draw.textbbox((0, 0), line, font=font)
-            line_height = bbox[3] - bbox[1]
-        except:
-            line_height = draw.textsize(line, font=font)[1]
-        line_heights.append(line_height)
-        total_text_height += line_height + 10  # 10 px spacing
+        # calc total height via textbbox
+        line_heights = [
+            draw.textbbox((0, 0), l, font=font)[3] - draw.textbbox((0, 0), l, font=font)[1]
+            for l in lines
+        ]
+        total_h = sum(line_heights) + (len(lines) - 1) * (mid // 5)
 
-    start_y = blur_y_start + (fade_height - total_text_height) // 2
+        if total_h <= max_h:
+            best_size, lo = mid, mid + 1
+        else:
+            hi = mid - 1
 
-    for i, line in enumerate(lines):
-        try:
-            line_width = draw.textlength(line, font=font)
-        except:
-            line_width = draw.textsize(line, font=font)[0]
-        x = (width - line_width) // 2
-        draw.text((x, start_y), line, font=font, fill=(255, 255, 255, 255))
-        start_y += line_heights[i] + 10
+    # 5. Render final text
+    font = get_truetype_font(best_size)
+    words = text.split()
+    final_lines, line = [], ""
+    for w in words:
+        test = (line + " " + w).strip()
+        if draw.textlength(test, font=font) <= max_w:
+            line = test
+        else:
+            final_lines.append(line)
+            line = w
+    final_lines.append(line)
+
+    line_heights = [
+        draw.textbbox((0, 0), l, font=font)[3] - draw.textbbox((0, 0), l, font=font)[1]
+        for l in final_lines
+    ]
+    total_h = sum(line_heights) + (len(final_lines) - 1) * (best_size // 5)
+    y = rect_y1 + (rect_y2 - rect_y1 - total_h) / 2
+
+    for l, h in zip(final_lines, line_heights):
+        w_text = draw.textlength(l, font=font)
+        x = rect_x1 + (rect_x2 - rect_x1 - w_text) / 2
+        # shadow
+        draw.text((x + 2, y + 2), l, font=font, fill=shadow_color)
+        # main text
+        draw.text((x, y), l, font=font, fill=text_color)
+        y += h + best_size // 5
 
     img.convert("RGB").save(output_path)
-    logging.info(f"Image saved to {output_path} in {time.time() - start_time:.2f} seconds")
+    logging.info(f"Image saved to {output_path} in {time.time() - start_time:.2f}s")
     return output_path
 
+
+add_text_to_image("image.png","Buy this buy this car watch those whddgeels buy thi..s")
 
 def upload_image(image_path):
     """Uploads an image to catbox.me and returns the image's display URL
