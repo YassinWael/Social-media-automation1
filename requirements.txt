@@ -4,3 +4,4 @@ Pillow
 protobuf==6.31.1
 python-dotenv==1.1.1
 Requests==2.32.4
+google.generativeai
