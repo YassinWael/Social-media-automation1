@@ -110,6 +110,10 @@ def get_page_token(page_id,session):
     return None
 
 
+import time
+import logging
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
+
 def add_text_to_image(
     image_path,
     text="Money is life.",
@@ -128,113 +132,97 @@ def add_text_to_image(
         logging.error(f"Error: Input image not found at {image_path}")
         return None
 
-    width, height = img.size
+    w, h = img.size
 
-    # 1. Background Blur
-    blur_area_height = int(height * 0.25)
-    blur_y_start = height - blur_area_height
-    blur_box = (0, blur_y_start, width, height)
-    blurred_region = img.crop(blur_box).filter(ImageFilter.GaussianBlur(radius=blur_radius))
-    img.paste(blurred_region, blur_box)
+    # 1. Background blur
+    blur_h = int(h * 0.25)
+    blur_y = h - blur_h
+    region = img.crop((0, blur_y, w, h)).filter(ImageFilter.GaussianBlur(blur_radius))
+    img.paste(region, (0, blur_y))
 
-    # 2. Frosted glass panel coords
-    margin_x = int(width * 0.05)
-    margin_y = int(blur_area_height * 0.15)
-    rect_x1 = margin_x
-    rect_y1 = blur_y_start + margin_y
-    rect_x2 = width - margin_x
-    rect_y2 = height - margin_y
+    # 2. Frosted glass panel
+    margin_x = int(w * 0.05)
+    margin_y = int(blur_h * 0.15)
+    x1, y1 = margin_x, blur_y + margin_y
+    x2, y2 = w - margin_x, h - margin_y
 
-    # Frosted Glass Overlay
-    glass_overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(glass_overlay)
-    draw.rounded_rectangle(
-        [rect_x1 - border_width, rect_y1 - border_width, rect_x2 + border_width, rect_y2 + border_width],
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(overlay)
+    # border
+    d.rounded_rectangle(
+        [x1 - border_width, y1 - border_width, x2 + border_width, y2 + border_width],
         radius=30 + border_width,
         fill=border_color
     )
-    draw.rounded_rectangle([rect_x1, rect_y1, rect_x2, rect_y2], radius=30, fill=glass_color)
-    img = Image.alpha_composite(img, glass_overlay)
+    # glass
+    d.rounded_rectangle([x1, y1, x2, y2], radius=30, fill=glass_color)
+    img = Image.alpha_composite(img, overlay)
 
-    # 3. TrueType font loader
-    def get_truetype_font(size):
-        candidates = [
-            "arial.ttf",                                    # Windows
-            "/Library/Fonts/Arial.ttf",                     # macOS
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"  # Linux
-        ]
-        for fp in candidates:
-            try:
-                return ImageFont.truetype(fp, size)
-            except Exception:
-                continue
-        raise RuntimeError("No TrueType font found. Install one or update the path.")
-
+    # 3. Prepare default bitmap font
+    font = ImageFont.load_default()
     draw = ImageDraw.Draw(img)
-    padding = int(margin_x * 0.5)
-    max_w = rect_x2 - rect_x1 - padding * 2
-    max_h = rect_y2 - rect_y1 - padding * 2
 
-    # 4. Binary search for largest fitting font size
-    lo, hi = 10, max(max_w, max_h)
-    best_size = lo
-    while lo <= hi:
-        mid = (lo + hi) // 2
-        font = get_truetype_font(mid)
+    # compute text‐box for scaling
+    pad = int(margin_x * 0.5)
+    box_w = (x2 - x1) - pad * 2
+    box_h = (y2 - y1) - pad * 2
 
-        # wrap text
-        words = text.split()
-        lines, line = [], ""
-        for w in words:
-            test = (line + " " + w).strip()
-            if draw.textlength(test, font=font) <= max_w:
-                line = test
-            else:
-                lines.append(line)
-                line = w
-        lines.append(line)
-
-        # calc total height via textbbox
-        line_heights = [
-            draw.textbbox((0, 0), l, font=font)[3] - draw.textbbox((0, 0), l, font=font)[1]
-            for l in lines
-        ]
-        total_h = sum(line_heights) + (len(lines) - 1) * (mid // 5)
-
-        if total_h <= max_h:
-            best_size, lo = mid, mid + 1
-        else:
-            hi = mid - 1
-
-    # 5. Render final text
-    font = get_truetype_font(best_size)
+    # wrap into lines at default font
     words = text.split()
-    final_lines, line = [], ""
-    for w in words:
-        test = (line + " " + w).strip()
-        if draw.textlength(test, font=font) <= max_w:
-            line = test
+    lines, cur = [], ""
+    for wrd in words:
+        test = (cur + " " + wrd).strip()
+        if draw.textlength(test, font=font) <= box_w:
+            cur = test
         else:
-            final_lines.append(line)
-            line = w
-    final_lines.append(line)
+            lines.append(cur)
+            cur = wrd
+    lines.append(cur)
 
-    line_heights = [
-        draw.textbbox((0, 0), l, font=font)[3] - draw.textbbox((0, 0), l, font=font)[1]
-        for l in final_lines
-    ]
-    total_h = sum(line_heights) + (len(final_lines) - 1) * (best_size // 5)
-    y = rect_y1 + (rect_y2 - rect_y1 - total_h) / 2
+    # measure original text size
+    line_spacing = 4
+    orig_w = 0
+    heights = []
+    for L in lines:
+        bbox = draw.textbbox((0, 0), L, font=font)
+        lw, lh = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        orig_w = max(orig_w, lw)
+        heights.append(lh)
+    orig_h = sum(heights) + (len(lines) - 1) * line_spacing
 
-    for l, h in zip(final_lines, line_heights):
-        w_text = draw.textlength(l, font=font)
-        x = rect_x1 + (rect_x2 - rect_x1 - w_text) / 2
-        # shadow
-        draw.text((x + 2, y + 2), l, font=font, fill=shadow_color)
-        # main text
-        draw.text((x, y), l, font=font, fill=text_color)
-        y += h + best_size // 5
+    # scale factor
+    sf = min(box_w / orig_w, box_h / orig_h)
+    new_w = max(1, int(orig_w * sf))
+    new_h = max(1, int(orig_h * sf))
 
+    # render text at default size into small layer
+    text_layer = Image.new("RGBA", (orig_w, orig_h), (0, 0, 0, 0))
+    dt = ImageDraw.Draw(text_layer)
+    yy = 0
+    for L, lh in zip(lines, heights):
+        dt.text((0, yy), L, font=font, fill=(255,255,255,255))
+        yy += lh + line_spacing
+
+    # scale it up
+    scaled = text_layer.resize((new_w, new_h), resample=Image.LANCZOS)
+    mask = scaled.split()[3]
+
+    # calculate paste position
+    dest_x = x1 + pad + ((box_w - new_w) // 2)
+    dest_y = y1 + pad + ((box_h - new_h) // 2)
+
+    # draw shadow
+    shadow_off = max(1, int(2 * sf))
+    shadow_img = Image.new("RGBA", (new_w, new_h), shadow_color)
+    shadow_img.putalpha(mask)
+    img.paste(shadow_img, (dest_x + shadow_off, dest_y + shadow_off), shadow_img)
+
+    # draw main text
+    text_img = Image.new("RGBA", (new_w, new_h), text_color)
+    text_img.putalpha(mask)
+    img.paste(text_img, (dest_x, dest_y), text_img)
+
+    # save
     img.convert("RGB").save(output_path)
     logging.info(f"Image saved to {output_path} in {time.time() - start_time:.2f}s")
     return output_path
