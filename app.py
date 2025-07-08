@@ -8,7 +8,8 @@ from icecream import ic
 from utils import *
 from json import loads,dumps
 import logging
-
+import sys
+load_dotenv()  # pull in .env vars
 
 # Set up logging to both console and file with 12-hour time format
 log_formatter = logging.Formatter(
@@ -17,13 +18,17 @@ log_formatter = logging.Formatter(
 )
 
 log_file = 'app.log'
+logging.info(environ.get("RAILWAY_PUBLIC_DOMAIN"))
+print(environ.get("RAILWAY_PUBLIC_DOMAIN"))
 file_handler = logging.FileHandler(log_file)
 file_handler.setFormatter(log_formatter)
 file_handler.setLevel(logging.INFO)
 
-logging.basicConfig(level=logging.INFO, handlers=[file_handler])
-flask_logger = logging.getLogger('werkzeug')
-flask_logger.setLevel(logging.ERROR)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(log_formatter)
+console_handler.setLevel(logging.INFO)
+
+logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
 
 
 POST_GENERATION_PROMPT = """Generate the text (caption) for a facebook page post. The page's niche, and extra information will be given to you.
@@ -31,7 +36,6 @@ POST_GENERATION_PROMPT = """Generate the text (caption) for a facebook page post
 """
 
 
-load_dotenv()  # pull in .env vars
 app = Flask(__name__)
 app.secret_key = "desfjofisjfsnoifjes"  # session encryption (dev-only) in prod use a fixed key
 
