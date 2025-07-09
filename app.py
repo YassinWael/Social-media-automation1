@@ -23,11 +23,7 @@ file_handler = logging.FileHandler(log_file)
 file_handler.setFormatter(log_formatter)
 file_handler.setLevel(logging.INFO)
 
-console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setFormatter(log_formatter)
-console_handler.setLevel(logging.INFO)
-
-logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
+logging.basicConfig(level=logging.INFO, handlers=[file_handler])
 
 
 POST_GENERATION_PROMPT = """Generate the text (caption) for a facebook page post. The page's niche, and extra information will be given to you.
@@ -40,9 +36,15 @@ app.secret_key = "desfjofisjfsnoifjes"  # session encryption (dev-only) in prod 
 
 FB_APP_ID = os.getenv("FB_APP_ID")
 FB_APP_SECRET = os.getenv("FB_APP_SECRET")
-REDIRECT_URI = "https://f762-213-137-138-220.ngrok-free.app/callback"
+REDIRECT_URI = "https://da4c6f4bc6c7.ngrok-free.app/callback"
 
 if environ.get("RAILWAY_PUBLIC_DOMAIN"):
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(log_formatter)
+    console_handler.setLevel(logging.INFO)
+
+    logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
+
     REDIRECT_URI = "https://social-media-automation1-production.up.railway.app/callback"
  
 # --- 1. Home page ---
@@ -232,7 +234,7 @@ def posts(page_id):
 
     session['post_ids'] = list_of_post_ids
 
-    return render_template("posts.html", posts=posts_data, niche=posts_niche, image=image, page_id=page_id)
+    return render_template("posts.html", posts=posts_data, niche=posts_niche, image=image, page_id=page_id,time_taken=session.get('time_taken_to_generate_post',None))
 
 @app.route('/generate_posts/<page_id>', methods=["POST"])
 def generate_posts(page_id):
@@ -261,7 +263,8 @@ def generate_posts(page_id):
     image_id = upload_image_to_facebook(page_id, get_page_token(page_id, session),image_to_post_link)
     post_to_page(page_id,image_caption,image_id)
     end_time = time.time()
-    logging.info(f"Time taken to generate post: {end_time - start_time}")
+    session['time_taken_to_generate_post'] = round(end_time - start_time,2)
+    logging.info(f"Time taken to generate post: {session.get('time_taken_to_generate_post')} seconds")
     return redirect(request.referrer)
 
 

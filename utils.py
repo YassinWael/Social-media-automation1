@@ -112,117 +112,75 @@ def get_page_token(page_id,session):
 
 
 
-def add_text_to_image(
-    image_path,
-    text="Money is life.",
-    output_path="output.png",
-    blur_radius=15,
-    glass_color=(255, 255, 255, 70),
-    border_color=(255, 255, 255, 100),
-    border_width=2,
-    text_color=(255, 255, 255, 245),
-    shadow_color=(0, 0, 0, 110)
-):
-    start_time = time.time()
-    try:
-        img = Image.open(image_path).convert("RGBA")
-    except FileNotFoundError:
-        logging.error(f"Error: Input image not found at {image_path}")
-        return None
 
-    w, h = img.size
 
-    # 1. Background blur
-    blur_h = int(h * 0.25)
-    blur_y = h - blur_h
-    region = img.crop((0, blur_y, w, h)).filter(ImageFilter.GaussianBlur(blur_radius))
-    img.paste(region, (0, blur_y))
+def add_text_to_image(image_path, text, output_path='output.png'):
+    """
+    Adds a clean, wrapped text overlay to an image.
+    Chooses a moderate font size so it remains legible without overwhelming the image.
+    Returns the path to the saved output image.
+    """
+    # Open image and create transparent overlay
+    img = Image.open(image_path).convert("RGBA")
+    width, height = img.size
+    overlay = Image.new("RGBA", img.size, (255, 255, 255, 0))
+    draw = ImageDraw.Draw(overlay)
 
-    # 2. Frosted glass panel
-    margin_x = int(w * 0.05)
-    margin_y = int(blur_h * 0.15)
-    x1, y1 = margin_x, blur_y + margin_y
-    x2, y2 = w - margin_x, h - margin_y
+    # Base font size: 6% of image height, bounded between 18 and 40 px
+    base_size = int(height * 0.06)
+    font_size = max(18, min(base_size, 40))
 
-    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    d = ImageDraw.Draw(overlay)
-    # border
-    d.rounded_rectangle(
-        [x1 - border_width, y1 - border_width, x2 + border_width, y2 + border_width],
-        radius=30 + border_width,
-        fill=border_color
-    )
-    # glass
-    d.rounded_rectangle([x1, y1, x2, y2], radius=30, fill=glass_color)
-    img = Image.alpha_composite(img, overlay)
+    # Attempt to load a common TrueType font
+    font_candidates = [
+        "arial.ttf", "DejaVuSans-Bold.ttf", "DejaVuSans.ttf",
+        "FreeSans.ttf", "LiberationSans-Regular.ttf"
+    ]
+    font = None
+    for fname in font_candidates:
+        try:
+            font = ImageFont.truetype(fname, font_size)
+            break
+        except OSError:
+            continue
+    if font is None:
+        font = ImageFont.load_default()
 
-    # 3. Prepare default bitmap font
-    font = ImageFont.load_default()
-    draw = ImageDraw.Draw(img)
+    # Function to measure text size
+    def _text_size(s, f):
+        try:
+            bbox = draw.textbbox((0, 0), s, font=f)
+            return bbox[2] - bbox[0], bbox[3] - bbox[1]
+        except AttributeError:
+            return f.getsize(s)
 
-    # compute text‐box for scaling
-    pad = int(margin_x * 0.5)
-    box_w = (x2 - x1) - pad * 2
-    box_h = (y2 - y1) - pad * 2
+    # Wrap text to fit within 85% of image width
+    max_w = width * 0.85
+    avg_char_w, _ = _text_size("A", font)
+    wrap_chars = max(int(max_w / (avg_char_w or 1)), 40)
+    lines = textwrap.wrap(text, width=wrap_chars)
 
-    # wrap into lines at default font
-    words = text.split()
-    lines, cur = [], ""
-    for wrd in words:
-        test = (cur + " " + wrd).strip()
-        if draw.textlength(test, font=font) <= box_w:
-            cur = test
-        else:
-            lines.append(cur)
-            cur = wrd
-    lines.append(cur)
+    # Calculate block dimensions
+    line_h = _text_size("A", font)[1]
+    spacing = int(line_h * 0.15)
+    block_h = line_h * len(lines) + spacing * (len(lines) - 1)
+    block_w = max(_text_size(line, font)[0] for line in lines)
 
-    # measure original text size
-    line_spacing = 4
-    orig_w = 0
-    heights = []
-    for L in lines:
-        bbox = draw.textbbox((0, 0), L, font=font)
-        lw, lh = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        orig_w = max(orig_w, lw)
-        heights.append(lh)
-    orig_h = sum(heights) + (len(lines) - 1) * line_spacing
+    # Position: center horizontally, 8% from bottom
+    x = (width - block_w) / 2
+    y = height - block_h - (height * 0.08)
 
-    # scale factor
-    sf = min(box_w / orig_w, box_h / orig_h)
-    new_w = max(1, int(orig_w * sf))
-    new_h = max(1, int(orig_h * sf))
+    # Draw semi-transparent background rectangle
+    pad = int(font_size * 0.3)
+    rect = [x - pad, y - pad, x + block_w + pad, y + block_h + pad]
+    draw.rectangle(rect, fill=(0, 0, 0, 140))
 
-    # render text at default size into small layer
-    text_layer = Image.new("RGBA", (orig_w, orig_h), (0, 0, 0, 0))
-    dt = ImageDraw.Draw(text_layer)
-    yy = 0
-    for L, lh in zip(lines, heights):
-        dt.text((0, yy), L, font=font, fill=(255,255,255,255))
-        yy += lh + line_spacing
+    # Draw each text line
+    for idx, line in enumerate(lines):
+        draw.text((x, y + idx * (line_h + spacing)), line, font=font, fill=(255, 255, 255, 255))
 
-    # scale it up
-    scaled = text_layer.resize((new_w, new_h), resample=Image.LANCZOS)
-    mask = scaled.split()[3]
-
-    # calculate paste position
-    dest_x = x1 + pad + ((box_w - new_w) // 2)
-    dest_y = y1 + pad + ((box_h - new_h) // 2)
-
-    # draw shadow
-    shadow_off = max(1, int(2 * sf))
-    shadow_img = Image.new("RGBA", (new_w, new_h), shadow_color)
-    shadow_img.putalpha(mask)
-    img.paste(shadow_img, (dest_x + shadow_off, dest_y + shadow_off), shadow_img)
-
-    # draw main text
-    text_img = Image.new("RGBA", (new_w, new_h), text_color)
-    text_img.putalpha(mask)
-    img.paste(text_img, (dest_x, dest_y), text_img)
-
-    # save
-    img.convert("RGB").save(output_path)
-    logging.info(f"Image saved to {output_path} in {time.time() - start_time:.2f}s")
+    # Composite and save
+    final = Image.alpha_composite(img, overlay).convert("RGB")
+    final.save(output_path, format='PNG')
     return output_path
 
 
