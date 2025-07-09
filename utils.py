@@ -8,6 +8,7 @@ from json import loads
 from os import environ
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import textwrap
+from os import path
 import time
 load_dotenv()
 #
@@ -132,19 +133,26 @@ def add_text_to_image(image_path, text, output_path='output.png'):
 
     # Attempt to load a common TrueType font
     font_candidates = [
-        "arial.ttf", "DejaVuSans-Bold.ttf", "DejaVuSans.ttf",
+        "DejaVuSans-Bold.ttf", "DejaVuSans.ttf",
         "FreeSans.ttf", "LiberationSans-Regular.ttf"
     ]
     font = None
-    for fname in font_candidates:
-        try:
-            font = ImageFont.truetype(fname, font_size)
-            break
-        except OSError:
-            continue
+    bundled_font_path = path.join(path.dirname(__file__),"fonts","arial.ttf")
+    try:
+        font = ImageFont.truetype(bundled_font_path, font_size)
+        ic(f"Loaded Arial: {bundled_font_path}")
+    except Exception as e:
+        for fname in font_candidates:
+            try:
+                font = ImageFont.truetype(fname, font_size)
+                ic(f"Loaded font: {fname}")
+                break
+            except OSError:
+                continue
+   
     if font is None:
         font = ImageFont.load_default()
-
+    
     # Function to measure text size
     def _text_size(s, f):
         try:
@@ -182,7 +190,6 @@ def add_text_to_image(image_path, text, output_path='output.png'):
     final = Image.alpha_composite(img, overlay).convert("RGB")
     final.save(output_path, format='PNG')
     return output_path
-
 
 
 def upload_image(image_path):
