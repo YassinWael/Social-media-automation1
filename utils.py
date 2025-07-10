@@ -65,7 +65,7 @@ def query_gemini(prompt,text="",image_path="",scheme=""):
     start_time = time.time()
     genai.configure(api_key=genai_api_key)
     model = genai.GenerativeModel("gemini-2.0-flash")
-    JSON_ONLY = f"ONLY RETURN THE RESULT AS JSON, Make sure the json will NOT raise a JSONDecodeError when loaded with json.loads() in Python. DOUBLE QUOTES You should make sure your json doesn't violate the scheme: {str(scheme)}, if unable to fill a value in the scheme simply leave it as None"
+    JSON_ONLY = f"ONLY RETURN THE RESULT AS JSON, Make sure the json will NOT raise a JSONDecodeError when loaded with json.loads() in Python. use double quotes for property names. You should make sure your json doesn't violate the scheme: {str(scheme)}, if unable to fill a value in the scheme simply leave it as None"
     try:
         response = model.generate_content([f"{prompt}, {JSON_ONLY}:  {text}",Image.open(image_path)] if image_path else f"{prompt}, {JSON_ONLY}:  {text}")
         raw_text = response.text
@@ -121,6 +121,7 @@ def add_text_to_image(image_path, text, output_path='output.png'):
     Chooses a moderate font size so it remains legible without overwhelming the image.
     Returns the path to the saved output image.
     """
+    logging.info(f"Adding {text} to {image_path}...")
     # Open image and create transparent overlay
     img = Image.open(image_path).convert("RGBA")
     width, height = img.size
@@ -192,7 +193,7 @@ def add_text_to_image(image_path, text, output_path='output.png'):
     return output_path
 
 
-def upload_image(image_path):
+def upload_image(image_path="",file_data=""):
     """Uploads an image to catbox.me and returns the image's display URL
     
     Args:
@@ -201,16 +202,30 @@ def upload_image(image_path):
     Returns:
         str: The URL of the uploaded image.
     """
+    url = "https://catbox.moe/user/api.php"
+    if not any([image_path,file_data]): return None
+    
     start_time = time.time()
-    logging.info(f"Uploading {image_path}...")
-    with open(image_path,"rb") as f:
+    logging.info(f"Uploading {image_path}...") if image_path else logging.info(f"Uploading file_data...")
+    if image_path:
+        with open(image_path,"rb") as f:
+            response = requests.post(
+                url = url,
+                data= {
+                    "reqtype":'fileupload'
+                },
+                files={
+                    "fileToUpload":f
+                }
+            )
+    else:
         response = requests.post(
-            url = "https://catbox.moe/user/api.php",
-            data= {
+            url = url,
+            data = {
                 "reqtype":'fileupload'
             },
-            files={
-                "fileToUpload":f
+            files = {
+                "fileToUpload":file_data
             }
         )
     logging.info(f"Uploaded to: {response.text} in {time.time() - start_time:.2f} seconds. ")

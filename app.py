@@ -1,3 +1,4 @@
+import io
 from pprint import pprint
 import time
 from flask import Flask, redirect, request, session, url_for, render_template
@@ -27,7 +28,7 @@ logging.basicConfig(level=logging.INFO, handlers=[file_handler])
 
 
 POST_GENERATION_PROMPT = """Generate the text (caption) for a facebook page post. The page's niche, and extra information will be given to you.
-                            you also will be given an Image of which your text will be overlayed on in the post, so aim for 2-3 sentences MAX. Follow the extended niche, you might also be given a cta for the post (what the user wants the post to accomplish) please follow it.
+                            you also will be given an Image of which your text will be overlayed on in the post, so aim for 2-3 sentences MAX. Follow the extended niche, you might also be given a cta for the post (what the user wants the post to accomplish) please follow it. AVOID A PROMOTIONAL TONE, MAKE THE CAPTION LOOK LIKE IT WAS WRITTEN BY A HUMAN AND NOT AN AI.
 """
 
 
@@ -36,7 +37,7 @@ app.secret_key = "desfjofisjfsnoifjes"  # session encryption (dev-only) in prod 
 
 FB_APP_ID = os.getenv("FB_APP_ID")
 FB_APP_SECRET = os.getenv("FB_APP_SECRET")
-REDIRECT_URI = "https://da4c6f4bc6c7.ngrok-free.app/callback"
+REDIRECT_URI = "https://1a7e72f9337d.ngrok-free.app/callback"
 
 if environ.get("RAILWAY_PUBLIC_DOMAIN"):
     console_handler = logging.StreamHandler(sys.stdout)
@@ -244,13 +245,25 @@ def generate_posts(page_id):
     image_niche = session[f'image_niche_{page_id}']
     cta = f'the desired outcome of this post is to: {request.form.get("cta","general")}'
 
-    image_link = session.get(f'image_{page_id}',get_image_from_unsplash(image_niche))
-    img_data = requests.get(image_link) 
-    img_path = "image.png"
 
-    with open(img_path,"wb") as f: # downloading the unsplash image to local
-        f.write(img_data.content)
+    image_upload = request.files.get('image_upload')
+    if image_upload:
+        img_path = image_upload.filename
+        image_upload.save(image_upload.filename)
+        ic(img_path)
+   
 
+
+
+    if not img_path: # The user has uploaded an image.
+        image_link = session.get(f'image_{page_id}',get_image_from_unsplash(image_niche)) # get the image via its niche
+        img_data = requests.get(image_link) 
+        img_path = "image.png"
+
+        with open(img_path,"wb") as f: # downloading the unsplash image to local
+            f.write(img_data.content)
+
+    
     image_caption = query_gemini(prompt=POST_GENERATION_PROMPT,text=f"{niche,extended_niche,cta}", image_path=img_path,scheme={"caption":None}).get("caption")
     output_path = add_text_to_image(img_path,image_caption)
 
