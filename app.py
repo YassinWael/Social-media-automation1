@@ -244,7 +244,7 @@ def generate_posts(page_id):
     extended_niche = session[f'extended_niche_{page_id}']
     image_niche = session[f'image_niche_{page_id}']
     cta = f'the desired outcome of this post is to: {request.form.get("cta","general")}'
-
+    img_path = None
 
     image_upload = request.files.get('image_upload')
     if image_upload:
