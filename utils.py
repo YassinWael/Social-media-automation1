@@ -16,8 +16,27 @@ load_dotenv()
 genai_api_key = environ.get("genai_api_key")
 unsplash_key = environ.get("unsplash_access_key")
 image_upload_key = environ.get("image_upload_key")
-if not all([genai_api_key,unsplash_key,image_upload_key]):
-    logging.warning(f"One of the api keys is empty: {genai_api_key,unsplash_key,image_upload_key}")
+telegram_token = environ.get("TELEGRAM_TOKEN")
+telegram_user_id = environ.get("TELEGRAM_USER_ID")
+if not all([genai_api_key,unsplash_key,image_upload_key,telegram_token,telegram_user_id]):
+    logging.warning(f"One of the api keys is empty: {genai_api_key,unsplash_key,image_upload_key,telegram_token,telegram_user_id}")
+
+
+payload = {
+    "chat_id":telegram_user_id
+}
+
+def send_message(message):
+    try:
+        payload['text'] = message
+        url = f"https://api.telegram.org/bot{telegram_token}/sendMessage?"
+        request = requests.post(url,data=payload)
+
+    except Exception as e:
+        ic(e)
+
+    
+
 def upload_image_to_facebook(page_id, page_token,image_url):
     logging.info(f"Uploading: {image_url}...")
     start_time = time.time()
